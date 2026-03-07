@@ -8,29 +8,24 @@ curl -fsSL https://raw.githubusercontent.com/loponai/oneshotmatrix/main/install.
 
 ---
 
-## Quick Start (Scala Hosting)
+## Quick Start
 
-We recommend [Scala Hosting](http://scala.tomspark.tech/) because their self-managed VPS gives you **full root access** out of the box — which is required for our Docker, firewall, and SSL configurations. KVM virtualization means Docker runs natively with zero issues.
+### Step 1: Get a Server
 
-### Step 1: Get a VPS
-
-1. Go to [Scala Hosting Self-Managed VPS](http://scala.tomspark.tech/) — make sure you're on the **Self-Managed** (unmanaged) plans, not the Managed ones
-2. Pick **Build #1** (2 cores, 4GB RAM, 50GB NVMe) — $19.95/mo, plenty for a personal/small-community server
-3. Under **OS**, select **Rocky Linux 10** (the one **without** SPanel) — this gives you a clean server with nothing to disable later. If you accidentally picked "Rocky Linux 10 with SPanel", see Step 3 to disable it
-4. Complete checkout and wait for your welcome email with your server IP and root password
+You need a VPS or any Linux machine (home PC, NUC, etc.) with root access and at least 4GB RAM. Any provider works — Hetzner, DigitalOcean, Linode, or a spare computer at home.
 
 ### Step 2: Get a domain and point it to your server
 
-You need a domain name that points to your VPS IP address. You can register one through Scala during checkout, or use one you already own.
+You need a domain name that points to your server's IP address. Use one you already own, or register a new one from any registrar (Namecheap, Porkbun, Cloudflare, etc.).
 
-**Important:** Do NOT use SPanel or the VPS's built-in nameservers for DNS. In Step 3 we disable SPanel, which would kill the VPS's DNS server and break your domain. Use **external DNS** instead (Cloudflare is free and works great).
+> **Home hosting?** You can skip the domain entirely and use Tailscale instead — see [Home Hosting with Tailscale](#home-hosting-with-tailscale) below.
 
 #### Set up DNS with Cloudflare (recommended)
 
-1. **Find your VPS IP** — it's in the welcome email from Scala
+1. **Find your server IP** — check your VPS provider's dashboard, or run `curl ifconfig.me` on your machine
 2. **Create a free [Cloudflare](https://dash.cloudflare.com/sign-up) account** if you don't have one
 3. **Add your domain** to Cloudflare — it will give you two nameservers (e.g. `ann.ns.cloudflare.com`, `bob.ns.cloudflare.com`)
-4. **Update your domain's nameservers** — go to [my.scalahosting.com](https://my.scalahosting.com) > My Domains > click Manage next to your domain > Manage Nameservers > select "Use custom nameservers" and enter the two Cloudflare nameservers
+4. **Update your domain's nameservers** at your registrar to use the two Cloudflare nameservers
 5. **Add an A record in Cloudflare** — go to your domain in the Cloudflare dashboard > DNS > Add Record:
 
 | Type | Name | Content | Proxy status |
@@ -45,40 +40,33 @@ You need a domain name that points to your VPS IP address. You can register one 
 
 If you don't want to use Cloudflare, you can create the A record in whatever registrar you bought the domain from (Namecheap, Porkbun, etc.) — just make sure you're **not** using the VPS as your nameserver.
 
-### Step 3: SSH in (and disable SPanel if needed)
+### Step 3: SSH in
 
-SSH is how you remotely control your server from a terminal. You type commands on your computer and they run on the VPS.
+SSH is how you remotely control your server from a terminal. You type commands on your computer and they run on the server.
 
 **On Mac/Linux:** Open Terminal (it's built in).
 
 **On Windows:** Open **PowerShell** (search for it in the Start menu) or install [Windows Terminal](https://aka.ms/terminal) from the Microsoft Store.
 
-Then connect to your server. Scala uses **port 6543** for SSH (not the default 22):
+Then connect to your server:
 
 ```bash
-ssh root@YOUR_SERVER_IP -p 6543
+ssh root@YOUR_SERVER_IP
 ```
 
-Replace `YOUR_SERVER_IP` with the IP from your Scala welcome email (e.g. `ssh root@142.248.180.64 -p 6543`).
-
-> **Getting "Connection refused"?** If port 6543 doesn't work, try without `-p 6543` (some Scala plans use the default port 22). Check your welcome email for the correct SSH port.
+Replace `YOUR_SERVER_IP` with your server's IP address (e.g. `ssh root@142.248.180.64`).
 
 - It will ask "Are you sure you want to continue connecting?" — type `yes` and press Enter
-- Enter the **root password** from your Scala welcome email
+- Enter the **root password** for your server
   - **The screen will stay completely blank as you type or paste** — no dots, no stars, nothing. This is normal! Just paste your password and press Enter. It's there, you just can't see it.
 
 Once you're in, you'll see a command prompt on your server.
 
-**If you picked "Rocky Linux 10" (without SPanel) in Step 1**, you're good — skip straight to Step 4.
-
-**If you picked "Rocky Linux 10 with SPanel"**, disable SPanel's web server so our installer can use ports 80/443:
-
-```bash
-systemctl mask --now httpd
-systemctl mask --now nginx
-```
-
-> This disables SPanel's web admin UI, but you won't need it — everything is managed via SSH after the installer runs.
+> **If something is already using ports 80/443** (like a control panel web server), disable it so our installer can use those ports:
+> ```bash
+> systemctl mask --now httpd
+> systemctl mask --now nginx
+> ```
 
 ### Step 4: Run the installer
 
@@ -122,18 +110,38 @@ Open your domain in a browser — or install it as a desktop app (see [Desktop &
 >
 > **"API error" on first load?** This is normal — the services take 30-60 seconds to fully start after the installer finishes. Wait a moment and refresh the page.
 
-## Why Scala Hosting?
+## Home Hosting with Tailscale
 
-| Feature | Why it matters |
-|---------|---------------|
-| **Full root access** | Required for Docker, firewall, and SSL configuration |
-| **KVM virtualization** | Docker runs natively — no issues like OpenVZ |
-| **Unmetered bandwidth** | No surprise bills from federation traffic |
-| **NVMe storage** | Fast database reads/writes for Synapse + PostgreSQL |
-| **Free snapshots** | Backup before changes, roll back if needed |
-| **Scalable** | Add RAM ($3/GB) or CPU ($10/core) anytime |
+You can run your Matrix server at home instead of renting a VPS — on a spare PC, a NUC, or any Linux machine on your network. [Tailscale](https://tailscale.com/) is a zero-config mesh VPN that makes this easy.
 
-**Recommended plan:** [Self-Managed Build #1](http://scala.tomspark.tech/) — 2 cores, 4GB RAM, 50GB NVMe at **$19.95/mo**. Step up to Build #2 (4 cores, 8GB) for heavier usage.
+### Install Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up
+```
+
+Follow the link to authenticate. Your machine is now part of your tailnet.
+
+### Private access (friends and family)
+
+All devices on your tailnet can reach the server directly — no port forwarding, no firewall rules, no dynamic DNS. Just install Tailscale on your friends' devices and have them join your tailnet. They can access Element chat at the server's Tailscale IP without exposing anything publicly.
+
+### Public access (federation)
+
+To expose your Matrix server publicly for federation with other Matrix servers:
+
+```bash
+tailscale funnel 443
+```
+
+Tailscale Funnel gives your machine a public HTTPS URL and handles SSL automatically — no need for Let's Encrypt, Nginx SSL config, or certificate renewal.
+
+### What this eliminates
+
+- **VPS rental** ($20-50/mo) — use hardware you already own
+- **Domain registration** — Tailscale Funnel provides a public URL
+- **SSL certificate management** — Tailscale handles HTTPS automatically via Funnel
+- **Firewall configuration** — Tailscale handles network access
 
 ---
 
@@ -525,9 +533,9 @@ docker compose logs            # All logs
 docker compose logs synapse    # Single service
 ```
 
-**Federation not working?** Check DNS (`dig A yourdomain.com`), test at https://federationtester.matrix.org, verify port 8448 is open (`ufw status` on Ubuntu/Debian, `firewall-cmd --list-ports` on Rocky Linux).
+**Federation not working?** Check DNS (`dig A yourdomain.com`), test at https://federationtester.matrix.org, verify port 8448 is open (`ufw status` on Ubuntu/Debian, `firewall-cmd --list-ports` on Rocky Linux). **Home server?** Use `tailscale funnel 443` to expose your server publicly for federation without port forwarding — see [Home Hosting with Tailscale](#home-hosting-with-tailscale).
 
-**Voice/video failing?** Check `docker compose logs coturn`, verify TURN ports open (`ufw status` or `firewall-cmd --list-ports`), test in Element under Settings > Voice & Video.
+**Voice/video failing?** Check `docker compose logs coturn`, verify TURN ports open (`ufw status` or `firewall-cmd --list-ports`), test in Element under Settings > Voice & Video. If hosting at home, Tailscale can help users on your tailnet connect directly without TURN port issues.
 
 **SSL issues?**
 ```bash
@@ -555,9 +563,9 @@ Permanently destroys all data including messages, accounts, and media.
 
 ### Requirements
 
-- **Ubuntu 22.04+**, **Debian 12+**, or **Rocky Linux 8+** on an unmanaged VPS with full root access (4GB RAM recommended)
+- **Ubuntu 22.04+**, **Debian 12+**, or **Rocky Linux 8+** on a VPS or any Linux machine (home PC, NUC, etc.) with full root access (4GB RAM recommended)
 - A domain name with DNS pointed to your server
-- Ports 80/443 free (if SPanel is installed, disable it first — see Step 3)
+- Ports 80/443 free (disable any existing web server first — see Step 3)
 
 ### Architecture
 
