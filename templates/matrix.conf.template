@@ -38,6 +38,17 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
+    # attempt to map in the static javascript webapp synapse-admin to the main website, good for managing rooms and users
+    location /_admin {
+        return 302 /_admin/;
+    }
+    location /_admin/ {
+        alias /data/admin/;
+        index index.html;
+        try_files $uri $uri/ =404;
+        #allow all; #not sure if needed
+    }
+
     # Well-known delegation (uses map-based headers to avoid add_header inheritance issues)
     location /.well-known/matrix/server {
         default_type application/json;

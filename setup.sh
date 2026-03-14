@@ -5,6 +5,9 @@ set -euo pipefail
 
 INSTALL_DIR="/opt/matrix-discord-killer"
 DATA_DIR="$INSTALL_DIR/data"
+INSTALL_LOG="$INSTALL_DIR/log"
+
+echo "START">$INSTALL_LOG
 
 # Restrict default file permissions (configs contain secrets)
 umask 077
@@ -85,17 +88,17 @@ template() {
 
 pkg_update() {
     if [ "$OS_FAMILY" = "debian" ]; then
-        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq >>$INSTALL_LOG 2>&1
     else
-        dnf makecache -q >/dev/null 2>&1
+        dnf makecache -q >>$INSTALL_LOG 2>&1
     fi
 }
 
 pkg_install() {
     if [ "$OS_FAMILY" = "rhel" ]; then
-        dnf install -y -q "$@" >/dev/null 2>&1
+        dnf install -y -q "$@" >>$INSTALL_LOG 2>&1
     else
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >>$INSTALL_LOG 2>&1
     fi
 }
 
@@ -105,12 +108,12 @@ detect_ssh_port() {
     # Primary: read from sshd config and drop-in files
     for cfg in /etc/ssh/sshd_config.d/*.conf /etc/ssh/sshd_config; do
         [ -f "$cfg" ] || continue
-        port=$(grep -iE '^\s*Port\s+' "$cfg" 2>/dev/null | awk '{print $2}' | head -1)
+        port=$(grep -iE '^\s*Port\s+' "$cfg" 2>>$INSTALL_LOG | awk '{print $2}' | head -1)
         [ -n "$port" ] && break
     done
     # Fallback: check what sshd is actually listening on
     if [ -z "$port" ]; then
-        port=$(ss -tlnp 2>/dev/null | grep -E '"sshd"|sshd' | awk '{print $4}' | rev | cut -d: -f1 | rev | head -1)
+        port=$(ss -tlnp 2>>$INSTALL_LOG | grep -E '"sshd"|sshd' | awk '{print $4}' | rev | cut -d: -f1 | rev | head -1)
     fi
     echo "${port:-22}"
 }
@@ -119,35 +122,35 @@ fw_allow() {
     # Usage: fw_allow 80/tcp  OR  fw_allow 49152:49200/udp
     local rule="$1"
     if [ "$OS_FAMILY" = "rhel" ]; then
-        if command -v firewall-cmd &>/dev/null; then
-            firewall-cmd --permanent --zone=public --add-port="$rule" >/dev/null 2>&1 || true
+        if command -v firewall-cmd &>>$INSTALL_LOG; then
+            firewall-cmd --permanent --zone=public --add-port="$rule" >>$INSTALL_LOG 2>&1 || true
         fi
     else
-        if command -v ufw &>/dev/null; then
-            ufw allow "$rule" >/dev/null 2>&1 || true
+        if command -v ufw &>>$INSTALL_LOG; then
+            ufw allow "$rule" >>$INSTALL_LOG 2>&1 || true
         fi
     fi
 }
 
 fw_enable() {
     if [ "$OS_FAMILY" = "rhel" ]; then
-        if ! command -v firewall-cmd &>/dev/null; then
+        if ! command -v firewall-cmd &>>$INSTALL_LOG; then
             echo -e "  ${YELLOW}Warning: firewalld not found — skipping firewall setup.${NC}"
             echo -e "  ${YELLOW}You may need to open ports manually.${NC}"
             return 0
         fi
-        systemctl enable --now firewalld >/dev/null 2>&1 || true
+        systemctl enable --now firewalld >>$INSTALL_LOG 2>&1 || true
         # Ensure default-deny for incoming traffic
-        firewall-cmd --permanent --zone=public --set-target=DROP >/dev/null 2>&1 || true
-        firewall-cmd --reload >/dev/null 2>&1 || true
+        firewall-cmd --permanent --zone=public --set-target=DROP >>$INSTALL_LOG 2>&1 || true
+        firewall-cmd --reload >>$INSTALL_LOG 2>&1 || true
     else
-        if ! command -v ufw &>/dev/null; then
+        if ! command -v ufw &>>$INSTALL_LOG; then
             echo -e "  ${YELLOW}Warning: ufw not found — skipping firewall setup.${NC}"
             echo -e "  ${YELLOW}You may need to open ports manually.${NC}"
             return 0
         fi
-        ufw default deny incoming >/dev/null 2>&1 || true
-        ufw --force enable >/dev/null 2>&1 || true
+        ufw default deny incoming >>$INSTALL_LOG 2>&1 || true
+        ufw --force enable >>$INSTALL_LOG 2>&1 || true
     fi
 }
 
@@ -155,29 +158,29 @@ fw_delete() {
     # Usage: fw_delete 80/tcp
     local rule="$1"
     if [ "$OS_FAMILY" = "rhel" ]; then
-        firewall-cmd --permanent --zone=public --remove-port="$rule" >/dev/null 2>&1 || true
+        firewall-cmd --permanent --zone=public --remove-port="$rule" >>$INSTALL_LOG 2>&1 || true
     else
-        ufw delete allow "$rule" >/dev/null 2>&1 || true
+        ufw delete allow "$rule" >>$INSTALL_LOG 2>&1 || true
     fi
 }
 
 fw_reload() {
     if [ "$OS_FAMILY" = "rhel" ]; then
-        firewall-cmd --reload >/dev/null 2>&1 || true
+        firewall-cmd --reload >>$INSTALL_LOG 2>&1 || true
     fi
     # ufw applies changes immediately, no reload needed
 }
 
 install_docker() {
     # Try get.docker.com first (works on most distros)
-    if curl -fsSL https://get.docker.com | sh >/dev/null 2>&1; then
+    if curl -fsSL https://get.docker.com | sh >>$INSTALL_LOG 2>&1; then
         return 0
     fi
     # Fallback for RHEL-family: add Docker repo manually (get.docker.com may not support newer Rocky/RHEL)
     if [ "$OS_FAMILY" = "rhel" ]; then
-        dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo >/dev/null 2>&1 || return 1
-        dnf install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null 2>&1 || return 1
-        systemctl enable --now docker >/dev/null 2>&1 || return 1
+        dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo >>$INSTALL_LOG 2>&1 || return 1
+        dnf install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >>$INSTALL_LOG 2>&1 || return 1
+        systemctl enable --now docker >>$INSTALL_LOG 2>&1 || return 1
         return 0
     fi
     return 1
@@ -186,7 +189,7 @@ install_docker() {
 # ─── Pre-flight ──────────────────────────────────────────────────────
 
 # Reopen stdin for interactive prompts (curl pipes eat stdin in install.sh)
-exec </dev/tty 2>/dev/null || true
+exec </dev/tty 2>>$INSTALL_LOG || true
 
 if ! [ -t 0 ]; then
     echo -e "${RED}Error: This script must be run interactively (needs a terminal for prompts).${NC}"
@@ -209,7 +212,8 @@ echo ""
 # Check if already configured
 if [ -f "$INSTALL_DIR/.env" ]; then
     echo -e "${YELLOW}Existing installation detected at $INSTALL_DIR${NC}"
-    read -rp "Reconfigure and overwrite? (y/N): " overwrite
+    echo "Reconfigure and overwrite? (y/N): "
+    read -r overwrite
     if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
         echo "Aborted."
         exit 0
@@ -225,7 +229,8 @@ echo "  [2] Stoat (Revolt)  - Modern UI, simple setup, no federation"
 echo ""
 
 while true; do
-    read -rp "Type 1 or 2, then press Enter: " platform_choice
+    echo "Type 1 or 2, then press Enter: "
+    read -r platform_choice
     case "$platform_choice" in
         1) PLATFORM="matrix"; break ;;
         2) PLATFORM="stoat"; break ;;
@@ -251,7 +256,8 @@ echo "Enter the domain name you pointed to this server's IP address."
 echo -e "  ${CYAN}Example: chat.example.com${NC}"
 echo ""
 while true; do
-    read -rp "Your domain: " DOMAIN
+    echo "Your domain: "
+    read -r DOMAIN
     if [[ "$DOMAIN" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] && [ ${#DOMAIN} -le 253 ]; then
         break
     fi
@@ -265,7 +271,8 @@ echo "Enter your email address (used for free SSL certificate from Let's Encrypt
 echo -e "  ${CYAN}This is only used for certificate expiry warnings — no spam.${NC}"
 echo ""
 while true; do
-    read -rp "Your email: " ACME_EMAIL
+    echo "Your email: "
+    read -r ACME_EMAIL
     if [[ "$ACME_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
         break
     fi
@@ -279,7 +286,8 @@ if [ "$PLATFORM" = "matrix" ]; then
     echo -e "  ${CYAN}Must be at least 8 characters with mixed character types.${NC}"
     echo ""
     while true; do
-        read -rsp "Admin password (typing is hidden): " ADMIN_PASSWORD
+        echo "Admin password (typing is hidden): "
+        read -rs ADMIN_PASSWORD
         echo ""
         if [ ${#ADMIN_PASSWORD} -lt 8 ]; then
             echo -e "  ${RED}Too short — must be at least 8 characters. Try again.${NC}"
@@ -304,14 +312,15 @@ if [ "$PLATFORM" = "matrix" ]; then
     # Bridges
     echo ""
     echo "Bridges let you read Discord/Telegram messages inside your chat client."
-    echo ""
-    read -rp "Install Discord bridge? (Y/n): " discord_choice
+    echo "Install Discord bridge? (Y/n): " 
+    read -r discord_choice
     ENABLE_DISCORD=false
     if [[ ! "$discord_choice" =~ ^[Nn] ]]; then
         ENABLE_DISCORD=true
     fi
 
-    read -rp "Install Telegram bridge? (Y/n): " telegram_choice
+    echo "Install Telegram bridge? (Y/n): " 
+    read -r telegram_choice
     ENABLE_TELEGRAM=false
     if [[ ! "$telegram_choice" =~ ^[Nn] ]]; then
         ENABLE_TELEGRAM=true
@@ -328,7 +337,8 @@ if [ "$PLATFORM" = "matrix" ]; then
     echo "  Telegram bridge: $ENABLE_TELEGRAM"
 fi
 echo ""
-read -rp "Look good? Press Enter to install, or type N to cancel: " proceed
+echo "Look good? Press Enter to install, or type N to cancel: "
+read -r proceed
 if [[ "$proceed" =~ ^[Nn] ]]; then
     echo "Aborted."
     exit 0
@@ -357,20 +367,20 @@ if [ "$OS_FAMILY" = "rhel" ]; then
         fail "Package install failed. Try running: dnf install -y curl wget openssl certbot firewalld"
     fi
 else
-    if ! pkg_install curl wget openssl certbot ufw; then
-        fail "Package install failed. Try running: apt-get install -y curl wget openssl certbot ufw"
+    if ! pkg_install curl wget openssl certbot ufw cron; then
+        fail "Package install failed. Try running: apt-get install -y curl wget openssl certbot ufw cron"
     fi
 fi
 
 # Docker
-if ! command -v docker &>/dev/null; then
+if ! command -v docker &>>$INSTALL_LOG; then
     if ! install_docker; then
         fail "Docker installation failed. Try manually: https://docs.docker.com/engine/install/"
     fi
 fi
 
 # Verify docker compose plugin
-if ! docker compose version &>/dev/null; then
+if ! docker compose version &>>$INSTALL_LOG; then
     if ! pkg_install docker-compose-plugin; then
         fail "Docker Compose plugin missing. Try: https://docs.docker.com/compose/install/"
     fi
@@ -441,6 +451,8 @@ ok
 
 step "Setting up Synapse, Element, Nginx, and Coturn configs..."
 
+( cd "$INSTALL_DIR" ; docker compose -f "$INSTALL_DIR/docker-compose.yml" build )
+
 # Synapse homeserver.yaml
 template "$INSTALL_DIR/templates/homeserver.yaml.template" "$DATA_DIR/synapse/homeserver.yaml"
 
@@ -475,7 +487,7 @@ if [ ! -f "$DATA_DIR/synapse/${DOMAIN}.signing.key" ]; then
         -v "$DATA_DIR/synapse:/data" \
         -e SYNAPSE_SERVER_NAME="$DOMAIN" \
         -e SYNAPSE_REPORT_STATS=no \
-        matrixdotorg/synapse:latest generate 2>/dev/null || true
+        matrixdotorg/synapse:latest generate 2>>$INSTALL_LOG || true
     # Restore our templated configs (generate overwrites them)
     mv -f "$DATA_DIR/synapse/homeserver.yaml.ours" "$DATA_DIR/synapse/homeserver.yaml"
     mv -f "$DATA_DIR/synapse/log.config.ours" "$DATA_DIR/synapse/log.config"
@@ -490,6 +502,12 @@ template "$INSTALL_DIR/templates/element-config.json.template" "$DATA_DIR/elemen
 # Nginx configs
 template "$INSTALL_DIR/templates/nginx.conf.template" "$DATA_DIR/nginx/nginx.conf"
 template "$INSTALL_DIR/templates/matrix.conf.template" "$DATA_DIR/nginx/matrix.conf"
+rm -rf "$DATA_DIR/admin" 2>>$INSTALL_LOG || true
+tar -xvzf "$INSTALL_DIR"/templates/synapse-admin-* -C "$DATA_DIR"
+mv "$DATA_DIR"/synapse-admin-*.*.* "$DATA_DIR"/admin
+chown -R root:root "$DATA_DIR"/admin
+chmod -R 755 "$DATA_DIR"/admin
+find "$DATA_DIR"/admin -type f -exec chmod 644 {} \;
 
 # Coturn
 template "$INSTALL_DIR/templates/turnserver.conf.template" "$DATA_DIR/coturn/turnserver.conf"
@@ -501,8 +519,9 @@ ok
 step "Getting SSL certificate (HTTPS) from Let's Encrypt..."
 
 # Stop anything on port 80
-systemctl stop nginx 2>/dev/null || true
-docker compose -f "$INSTALL_DIR/docker-compose.yml" down 2>/dev/null || true
+systemctl stop nginx 2>>$INSTALL_LOG || true
+
+docker compose -f "$INSTALL_DIR/docker-compose.yml" down 2>>$INSTALL_LOG || true
 
 certbot certonly \
     --standalone \
@@ -511,7 +530,7 @@ certbot certonly \
     --email "$ACME_EMAIL" \
     -d "$DOMAIN" \
     --preferred-challenges http \
-    2>/dev/null
+    2>>$INSTALL_LOG
 
 if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]; then
     echo ""
@@ -568,7 +587,7 @@ if [ "$ENABLE_DISCORD" = true ]; then
     # Generate default config
     docker run --rm \
         -v "$DATA_DIR/mautrix-discord:/data" \
-        dock.mau.dev/mautrix/discord:latest 2>/dev/null || true
+        dock.mau.dev/mautrix/discord:latest 2>>$INSTALL_LOG || true
 
     if [ -f "$DATA_DIR/mautrix-discord/config.yaml" ]; then
         # Patch homeserver address/domain — match localhost, 127.0.0.1, example, or any default placeholder
@@ -584,7 +603,7 @@ if [ "$ENABLE_DISCORD" = true ]; then
         # Re-run to generate registration.yaml with patched config
         docker run --rm \
             -v "$DATA_DIR/mautrix-discord:/data" \
-            dock.mau.dev/mautrix/discord:latest 2>/dev/null || true
+            dock.mau.dev/mautrix/discord:latest 2>>$INSTALL_LOG || true
     fi
 
     # Copy registration to synapse data dir (restrict perms — contains appservice tokens)
@@ -600,7 +619,7 @@ if [ "$ENABLE_TELEGRAM" = true ]; then
     # Generate default config
     docker run --rm \
         -v "$DATA_DIR/mautrix-telegram:/data" \
-        dock.mau.dev/mautrix/telegram:latest 2>/dev/null || true
+        dock.mau.dev/mautrix/telegram:latest 2>>$INSTALL_LOG || true
 
     if [ -f "$DATA_DIR/mautrix-telegram/config.yaml" ]; then
         # Patch homeserver address/domain — match localhost, 127.0.0.1, example, or any default placeholder
@@ -616,7 +635,7 @@ if [ "$ENABLE_TELEGRAM" = true ]; then
         # Re-run to generate registration.yaml with patched config
         docker run --rm \
             -v "$DATA_DIR/mautrix-telegram:/data" \
-            dock.mau.dev/mautrix/telegram:latest 2>/dev/null || true
+            dock.mau.dev/mautrix/telegram:latest 2>>$INSTALL_LOG || true
     fi
 
     if [ -f "$DATA_DIR/mautrix-telegram/registration.yaml" ]; then
@@ -671,7 +690,7 @@ fi
 # Wait for Synapse to be ready
 echo -n "  Waiting for Matrix server to come online..."
 for i in $(seq 1 60); do
-    if docker compose exec -T synapse curl -sf http://localhost:8008/health >/dev/null 2>&1; then
+    if docker compose exec -T synapse curl -sf http://localhost:8008/health >>$INSTALL_LOG 2>&1; then
         break
     fi
     if [ "$i" -eq 60 ]; then
@@ -713,7 +732,7 @@ fi
 # Certbot cron for renewal (webroot mode using nginx)
 # Add cert renewal cron if not already present
 CRON_LINE="0 3 * * * certbot renew --deploy-hook 'cd $INSTALL_DIR && docker compose exec -T nginx nginx -s reload && docker compose restart coturn' # matrix-discord-killer"
-(crontab -l 2>/dev/null | grep -v "# matrix-discord-killer" || true; echo "$CRON_LINE") | crontab -
+(crontab -l 2>>$INSTALL_LOG | grep -v "# matrix-discord-killer" || true; echo "$CRON_LINE") | crontab -
 
 # ─── Save credentials ───────────────────────────────────────────────
 
@@ -802,14 +821,14 @@ else
 fi
 
 # Docker
-if ! command -v docker &>/dev/null; then
+if ! command -v docker &>>$INSTALL_LOG; then
     if ! install_docker; then
         fail "Docker installation failed. Try manually: https://docs.docker.com/engine/install/"
     fi
 fi
 
 # Verify docker compose plugin
-if ! docker compose version &>/dev/null; then
+if ! docker compose version &>>$INSTALL_LOG; then
     if ! pkg_install docker-compose-plugin; then
         fail "Docker Compose plugin missing. Try: https://docs.docker.com/compose/install/"
     fi
@@ -838,9 +857,9 @@ fi
 # Generate VAPID keys if missing
 if [ -z "${VAPID_PRIVATE_KEY:-}" ] || [ -z "${VAPID_PUBLIC_KEY:-}" ]; then
     VAPID_TEMP=$(mktemp)
-    openssl ecparam -name prime256v1 -genkey -noout -out "$VAPID_TEMP" 2>/dev/null
+    openssl ecparam -name prime256v1 -genkey -noout -out "$VAPID_TEMP" 2>>$INSTALL_LOG
     VAPID_PRIVATE_KEY=$(base64 < "$VAPID_TEMP" | tr -d '\n' | tr -d '=')
-    VAPID_PUBLIC_KEY=$(openssl ec -in "$VAPID_TEMP" -outform DER 2>/dev/null | tail -c 65 | base64 | tr '/+' '_-' | tr -d '\n' | tr -d '=')
+    VAPID_PUBLIC_KEY=$(openssl ec -in "$VAPID_TEMP" -outform DER 2>>$INSTALL_LOG | tail -c 65 | base64 | tr '/+' '_-' | tr -d '\n' | tr -d '=')
     rm -f "$VAPID_TEMP"
 fi
 
@@ -941,7 +960,7 @@ step "Waiting for Stoat to come online..."
 echo -e "  ${YELLOW}This may appear to hang for up to 2 minutes — that's normal, it's waiting for services to start.${NC}"
 echo -n "  Checking API..."
 for i in $(seq 1 90); do
-    if docker compose exec -T api curl -sf http://localhost:14702/ >/dev/null 2>&1; then
+    if docker compose exec -T api curl -sf http://localhost:14702/ >>$INSTALL_LOG 2>&1; then
         break
     fi
     if [ "$i" -eq 90 ]; then

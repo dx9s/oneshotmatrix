@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # matrix-discord-killer installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/loponai/oneshotmatrix/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/dx9s/oneshotmatrix/customize/install.sh | bash
 set -euo pipefail
 
-REPO_URL="https://github.com/loponai/oneshotmatrix.git"
+REPO_URL="https://github.com/dx9s/oneshotmatrix.git"
 INSTALL_DIR="/opt/matrix-discord-killer"
 
 RED='\033[0;31m'

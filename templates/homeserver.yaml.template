@@ -26,7 +26,7 @@ database:
 log_config: "/data/log.config"
 
 media_store_path: /data/media_store
-max_upload_size: 100M
+max_upload_size: 20M
 url_preview_enabled: true
 url_preview_ip_range_blacklist:
   - "0.0.0.0/8"
@@ -76,3 +76,56 @@ report_stats: false
 
 # Bridge registrations (managed by setup.sh)
 # __BRIDGE_REGISTRATIONS__
+
+
+
+###########################
+# more synapse configuration option
+
+#uncomment as desired
+#allow_public_rooms_over_federation: true
+#registration_requires_token: true  
+
+# this fix me not able to publish rooms to directory, not sure why
+room_list_publication_rules:
+  - action: allow
+    user_id: '*'
+    room_id: '*'
+    alias: '*'
+    require_admin: true
+
+
+#not sure if these are good defaults
+retention:
+  enabled: true
+  purge_jobs:
+    - interval: 1h
+      longest_max_lifetime: 1d
+    - interval: 6h
+      shortest_max_lifetime: 1d
+    - interval: 24h
+  allowed_lifetime_min: 1h
+  allowed_lifetime_max: 1y
+
+server_notices:
+  system_mxid_localpart: server
+  system_mxid_display_name: "Server Notices"
+  room_name: "Server Notices"
+  auto_join: true
+
+#modules:
+#  - module: synapse_user_restrictions.UserRestrictionsModule
+#    config:
+#      rules:
+#        - match: "@admin:__DOMAIN__"
+#          allow: [invite, create_room]
+#        - match: "@user:__DOMAIN__"
+#          allow: [invite]
+#      default_deny: [invite, create_room]
+
+
+#default these to more restrictive, enable(true) or comment out as desired ?!
+enable_group_creation: false
+allow_public_rooms_without_auth: false
+allow_public_rooms_over_federation: false
+

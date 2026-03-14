@@ -19,6 +19,9 @@ services:
       - matrix
 
   synapse:
+    build:
+      context: .
+      dockerfile: synapse-cust.yml
     image: matrixdotorg/synapse:latest
     restart: unless-stopped
     depends_on:
@@ -66,6 +69,7 @@ services:
       - "443:443"
       - "8448:8448"
     volumes:
+      - ./data/admin:/data/admin
       - ./data/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./data/nginx/matrix.conf:/etc/nginx/conf.d/matrix.conf:ro
       - ./data/certbot/www:/var/www/certbot:ro

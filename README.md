@@ -3,8 +3,24 @@
 **Deploy a self-hosted chat platform in one command.** Choose between Matrix/Element (federated, E2EE, bridges) or Stoat/Revolt (modern UI, simple setup).
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/loponai/oneshotmatrix/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dx9s/oneshotmatrix/customize/install.sh | sudo bash
 ```
+
+## Updates/Changes from upstream
+
+**This customize** branch, the intent is to add modules into the upstream synapse docker image. 
+
+1. Added https://github.com/matrix-org/synapse-user-restrictions.git
+
+(might add more as I discover them)
+
+Made changes to homeserver.yml template:
+1. added section to allow and default permission for publishing to directory for admin role
+2. changed max upload size down to 20M (from 100M)
+3. other defaults that I think is more restrictive by default (**I** think)
+4. added http://site/\_admin/ based on synapse-admin project
+5. logging output to the installed directory in case things break
+6. changed the read -rp in the setup.sh as the prompts were not working for me
 
 ---
 
@@ -71,7 +87,7 @@ Once you're in, you'll see a command prompt on your server.
 ### Step 4: Run the installer
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/loponai/oneshotmatrix/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/dx9s/oneshotmatrix/customize/install.sh | sudo bash
 ```
 
 You'll be asked for:
